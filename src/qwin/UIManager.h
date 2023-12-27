@@ -136,8 +136,6 @@ class ComponentUI {
 	 */
 	virtual void setFocus() = 0;
 
-    virtual NativeComponent* getNative() = 0;
-
 	// dump random debugging info
 	virtual void debug() = 0;
 
@@ -154,7 +152,7 @@ class ComponentUI {
  * Special UI implementation for components that have no visible 
  * parts or lightweight components that paint themselves.
  */
-class NullUI : public ComponentUI {
+class NullUI : public virtual ComponentUI {
 
 	/**
 	 * This is the one method that isn't a stub so we can walk
@@ -202,7 +200,7 @@ class NullUI : public ComponentUI {
  *                                                                          *
  ****************************************************************************/
 
-class StaticUI : public ComponentUI {
+class StaticUI : public virtual ComponentUI {
 
   public:
 
@@ -211,7 +209,7 @@ class StaticUI : public ComponentUI {
 	virtual void setIcon(const char* s) = 0;
 };
 
-class PanelUI : public ComponentUI {
+class PanelUI : public virtual ComponentUI {
 
   public:
 
@@ -223,7 +221,7 @@ class PanelUI : public ComponentUI {
  *                                                                          *
  ****************************************************************************/
 
-class ButtonUI : public ComponentUI {
+class ButtonUI : public virtual ComponentUI {
 
   public:
 
@@ -247,7 +245,7 @@ class RadioButtonUI : public ButtonUI {
 
 };
 
-class RadiosUI : public ComponentUI {
+class RadiosUI : public virtual ComponentUI {
 
   public:
 
@@ -273,7 +271,7 @@ class CheckboxUI : public RadioButtonUI {
  *                                                                          *
  ****************************************************************************/
 
-class ComboBoxUI : public ComponentUI {
+class ComboBoxUI : public virtual ComponentUI {
 
   public:
 
@@ -291,7 +289,7 @@ class ComboBoxUI : public ComponentUI {
  *                                                                          *
  ****************************************************************************/
 
-class ListBoxUI : public ComponentUI {
+class ListBoxUI : public virtual ComponentUI {
 
   public:
 
@@ -310,7 +308,7 @@ class ListBoxUI : public ComponentUI {
  *                                                                          *
  ****************************************************************************/
 
-class TextUI : public ComponentUI {
+class TextUI : public virtual ComponentUI {
 
   public:
 
@@ -319,7 +317,7 @@ class TextUI : public ComponentUI {
     virtual char* getText() = 0;
 };
 
-class TextAreaUI : public TextUI {
+class TextAreaUI : public virtual TextUI {
 
   public:
 
@@ -331,7 +329,7 @@ class TextAreaUI : public TextUI {
  *                                                                          *
  ****************************************************************************/
 
-class GroupBoxUI : public ComponentUI {
+class GroupBoxUI : public virtual ComponentUI {
 
   public:
 
@@ -345,7 +343,7 @@ class GroupBoxUI : public ComponentUI {
  *                                                                          *
  ****************************************************************************/
 
-class TabbedPaneUI : public ComponentUI {
+class TabbedPaneUI : public virtual ComponentUI {
 
   public:
 	
@@ -360,7 +358,7 @@ class TabbedPaneUI : public ComponentUI {
  *                                                                          *
  ****************************************************************************/
 
-class TableUI : public ComponentUI {
+class TableUI : public virtual ComponentUI {
 
   public:
 
@@ -377,7 +375,7 @@ class TableUI : public ComponentUI {
  *                                                                          *
  ****************************************************************************/
 
-class TreeUI : public ComponentUI {
+class TreeUI : public virtual ComponentUI {
 
   public:
 	
@@ -391,7 +389,7 @@ class TreeUI : public ComponentUI {
  *                                                                          *
  ****************************************************************************/
 
-class ScrollBarUI : public ComponentUI {
+class ScrollBarUI : public virtual ComponentUI {
 
   public:
 
@@ -405,7 +403,7 @@ class ScrollBarUI : public ComponentUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowUI : public ComponentUI {
+class WindowUI : public virtual ComponentUI {
 
   public:
 
@@ -425,7 +423,7 @@ class WindowUI : public ComponentUI {
 //
 //////////////////////////////////////////////////////////////////////
 
-class HostFrameUI : public WindowUI {
+class HostFrameUI : public virtual WindowUI {
 
   public:
 
@@ -438,7 +436,7 @@ class HostFrameUI : public WindowUI {
  *                                                                          *
  ****************************************************************************/
 
-class DialogUI : public WindowUI {
+class DialogUI : public virtual WindowUI {
 
   public:
 
@@ -454,7 +452,7 @@ class DialogUI : public WindowUI {
 /**
  * Interface of the ComponentUI for menus.
  */
-class MenuUI : public ComponentUI {
+class MenuUI : public virtual ComponentUI {
 
   public:
 
@@ -476,13 +474,13 @@ class MenuUI : public ComponentUI {
  *                                                                          *
  ****************************************************************************/
 
-class ToolBarUI : public ComponentUI {
+class ToolBarUI : public virtual ComponentUI {
 
   public:
 
 };
 
-class StatusBarUI : public ComponentUI {
+class StatusBarUI : public virtual ComponentUI {
 
   public:
 

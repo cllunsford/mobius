@@ -28,7 +28,7 @@
 
 DialogUI* UIManager::getDialogUI(Dialog* d)
 {
-    return new WindowsDialogUI(new WindowsDialog(d));
+    return new WindowsDialog(d);
 }
 
 SystemDialogUI* UIManager::getOpenDialogUI(OpenDialog* od)
@@ -53,102 +53,102 @@ NullUI* UIManager::getNullUI()
 
 StaticUI* UIManager::getStaticUI(Static* s)
 {
-	return new WindowsStaticUI(new WindowsStatic(s));
+	return new WindowsStatic(s);
 }
 
 PanelUI* UIManager::getPanelUI(Panel* p)
 {
-	return new WindowsPanelUI(new WindowsPanel(p));
+	return new WindowsPanel(p);
 }
 
 ButtonUI* UIManager::getButtonUI(Button* b)
 {
-	return new WindowsButtonUI(new WindowsButton(b));
+	return new WindowsButton(b);
 }
 
 RadioButtonUI* UIManager::getRadioButtonUI(RadioButton* rb)
 {
-	return new WindowsRadioButtonUI(new WindowsRadioButton(rb));
+	return new WindowsRadioButton(rb);
 }
 
 RadiosUI* UIManager::getRadiosUI(Radios* r)
 {
-	return new WindowsRadiosUI(new WindowsRadios(r));
+	return new WindowsRadios(r);
 }
 
 CheckboxUI* UIManager::getCheckboxUI(Checkbox* cb)
 {
-	return new WindowsCheckboxUI(new WindowsCheckbox(cb));
+	return new WindowsCheckbox(cb);
 }
 
 ComboBoxUI* UIManager::getComboBoxUI(ComboBox* cb)
 {
-	return new WindowsComboBoxUI(new WindowsComboBox(cb));
+	return new WindowsComboBox(cb);
 }
 
 ListBoxUI* UIManager::getListBoxUI(ListBox* cb)
 {
-	return new WindowsListBoxUI(new WindowsListBox(cb));
+	return new WindowsListBox(cb);
 }
 
 GroupBoxUI* UIManager::getGroupBoxUI(GroupBox* gb)
 {
-	return new WindowsGroupBoxUI(new WindowsGroupBox(gb));
+	return new WindowsGroupBox(gb);
 }
 
 TextUI* UIManager::getTextUI(Text* t)
 {
-	return new WindowsTextUI(new WindowsText(t));
+	return new WindowsText(t);
 }
 
 TextAreaUI* UIManager::getTextAreaUI(TextArea* ta)
 {
-	return new WindowsTextAreaUI(new WindowsTextArea(ta));
+	return new WindowsTextArea(ta);
 }
 
 ToolBarUI* UIManager::getToolBarUI(ToolBar* tb)
 {
-	return new WindowsToolBarUI(new WindowsToolBar(tb));
+	return new WindowsToolBar(tb);
 }
 
 StatusBarUI* UIManager::getStatusBarUI(StatusBar* sb)
 {
-    return new WindowsStatusBarUI(new WindowsStatusBar(sb));
+    return new WindowsStatusBar(sb);
 }
 
 TabbedPaneUI* UIManager::getTabbedPaneUI(TabbedPane* tp)
 {
-	return new WindowsTabbedPaneUI(new WindowsTabbedPane(tp));
+	return new WindowsTabbedPane(tp);
 }
 
 TableUI* UIManager::getTableUI(Table* t)
 {
-	return new WindowsTableUI(new WindowsTable(t));
+	return new WindowsTable(t);
 }
 
 TreeUI* UIManager::getTreeUI(Tree* t)
 {
-	return new WindowsTreeUI(new WindowsTree(t));
+	return new WindowsTree(t);
 }
 
 ScrollBarUI* UIManager::getScrollBarUI(ScrollBar* sb)
 {
-	return new WindowsScrollBarUI(new WindowsScrollBar(sb));
+	return new WindowsScrollBar(sb);
 }
 
 WindowUI* UIManager::getWindowUI(Window* w)
 {
-    return new WindowsWindowUI(new WindowsWindow(w));
+    return new WindowsWindow(w);
 }
 
 HostFrameUI* UIManager::getHostFrameUI(HostFrame* f)
 {
-    return new WindowsHostFrameUI(new WindowsHostFrame(f));
+    return new WindowsHostFrame(f);
 }
 
 MenuUI* UIManager::getMenuUI(MenuItem* item)
 {
-    return new WindowsMenuUI(new WindowsMenuItem(item));
+    return new WindowsMenuItem(item);
 }
 
 /****************************************************************************
@@ -312,7 +312,7 @@ HWND WindowsComponent::getHandle(Component* c)
 
     ComponentUI* ui = c->getUI();
     if (ui != NULL) {
-        WindowsComponent* wc = (WindowsComponent*)ui->getNative();
+        WindowsComponent* wc = dynamic_cast<WindowsComponent*>(ui);
         if (wc != NULL)
           handle = (HWND)wc->getHandle();
     }
@@ -389,7 +389,7 @@ PUBLIC WindowsContext* WindowsComponent::getWindowsContext(Component* c)
 
 	if (w != NULL) {
 		ComponentUI* ui = w->getUI();
-        WindowsWindow* native = (WindowsWindow*)ui->getNative();
+        WindowsWindow* native = dynamic_cast<WindowsWindow*>(ui);
 		context = native->getContext();
 	}
 
@@ -624,7 +624,7 @@ LONG_PTR WindowsComponent::messageHandler(UINT msg, WPARAM wparam, LPARAM lparam
                 Window* root = c->getWindow();
                 ComponentUI* ui = root->getUI();
                 if (ui != NULL) {
-                    WindowsComponent* rootui = (WindowsComponent*)ui->getNative();
+                    WindowsComponent* rootui = dynamic_cast<WindowsComponent*>(ui);
 
                     if (root->isForcedFocus()) {
                       status = rootui->messageHandler(msg, wparam, lparam);

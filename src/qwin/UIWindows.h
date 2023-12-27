@@ -7,39 +7,30 @@
  * 
  * Implementations of ComponentUI for the Windows platform.
  *
- * C++ multiple inheritance just sucks so bad it's hard to know where to begin.
- * 
- * I tried to accomplsih something similar to Java interfaces
- * with an inherited base class that provided default implementations
- * for most of the things in ComponentUI.  But under MSVC 6.0 this
- * doesn't work because the inherited methods don't "satisfy" the
- * pure virtual methods, and making WindowsComponent subclass
- * ComponentUI results in ambiguous inheritance.  
+ * These implementations rely on multiple inheritance because there are two
+ * class hierarchies:
+ *  - The concrete/native class for shared Windows-specific functionality
+ *  - The interface hierarchy of ComponentUI
  *
- * Next I tried defining every damn ComponentUI method in each subclass and
- * redirected them to a common implementation with a different name
- * in WindowsComponent.  That works but is ugly.
+ * We have problems with multiple inheritance because all Windows implementations
+ * inherit from ComponentUI on two paths:
+ *  1. From the Windows-native hierarchy (WindowsComponent inherits ComponentUI)
+ *  2. From the *UI interface (PanelUI inherits ComponentUI)
  *
- * But this still resulted in creepy vtable confusion when casting
- * between ComponentUI and WindowsWindowUI.  The pointers were the same
- * in the debugger, but the contents came out completely different.  It is
- * possibly an MSVC 6 bug, try it the right way on Mac.
+ * It may be possible to implement the Windows native components without this use
+ * of multiple inheritance, but, at a minimum, we can avoid the use of proxy
+ * classes by leveraging virtual inheritance on the Interface side.
+ * All *UI Interface classes inherit from ComponentUI virtually.
+ * Thus, all Windows-implementation base classes that inherit ComponentUI should also
+ * do so virtually, e.g.:
  *
- * Next I tried punting and writing a single base class for Windows UIs
- * that implements all of the abstract classes and stubs out the methods.
- * But since several of the "interfaces" have methods with the same name,
- * you have ambiguous methods.  
- * 
- * After sticking soldering irons in my urethra for a few days, I gave
- * up and defined a collection of proxy classes that implement the
- * abstract interfaces, and just forward the methods to handler classes
- * That have their own hierarchy.  
+ * class WindowsComponent : public NativeComponent, public virtual ComponentUI
+ *                                 ^ concrete base         ^ virtual base interface
  *
- * If you can find a way to do this with multiple inheritance let me know
- * and you will win a fabulous prize.  Oh, and don't tell me to read
- * page 345-9871 subparagraph 45 of the fucking C++ manual, I've been there.
- * If you can come up with WORKING code, then show me.    And don't tell
- * me to use templates, just don't go there.
+ * And all derived components can inherit from WindowsComponent and their relevant
+ * *UI interface normally without ambiguous/duplicate inheritance of ComponentUI, e.g.:
+ *
+ * class WindowsStatic : public WindowsComponent, public StaticUI
  */
 
 #ifndef UI_WINDOWS_H
@@ -299,7 +290,7 @@ class WindowsMessageDialog : public SystemDialogUI {
  * Unfortunately have to get to these via proxy due to odd 
  * MSVC/C++ behavior with multiple inheritance.
  */
-class WindowsComponent : public NativeComponent {
+class WindowsComponent : public NativeComponent, public virtual ComponentUI {
 
   public:
 
@@ -355,7 +346,7 @@ class WindowsComponent : public NativeComponent {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsStatic : public WindowsComponent {
+class WindowsStatic : public WindowsComponent, public StaticUI {
 
   public:
 	
@@ -374,93 +365,16 @@ class WindowsStatic : public WindowsComponent {
 	void open();
 	Color* colorHook(Graphics* g);
 
+    void postOpen() {
+    }
+    bool isNativeParent() {
+        // on Windows statics are always parents
+        return true;
+    }
   private:
 
 	Static* mStatic;
     bool mAutoColor;
-
-};
-
-class WindowsStaticUI : public StaticUI {
-
-  public:
-
-	WindowsStaticUI(WindowsStatic* s) {
-        mNative = s;
-    }
-	~WindowsStaticUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void setText(const char* s) {
-        mNative->setText(s);
-    }
-	void setBitmap(const char* s) {
-        mNative->setBitmap(s);
-    }
-	void setIcon(const char* s) {
-        mNative->setIcon(s);
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-		mNative->getPreferredSize(w, d);
-	}
-	bool isNativeParent() {
-		// on Windows statics are always parents
-		return true;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-  private:
-
-	class WindowsStatic* mNative;
 
 };
 
@@ -470,7 +384,7 @@ class WindowsStaticUI : public StaticUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsPanel : public WindowsComponent {
+class WindowsPanel : public WindowsComponent, public PanelUI {
 
   public:
 	
@@ -486,82 +400,12 @@ class WindowsPanel : public WindowsComponent {
     void postOpen();
 	Color* colorHook(Graphics* g);
 
+    void getPreferredSize(Window* w, Dimension* d) {
+        // defined by children
+    }
   private:
 
 	Panel* mPanel;
-
-};
-
-class WindowsPanelUI : public PanelUI {
-
-  public:
-
-	WindowsPanelUI(WindowsPanel* p) {
-        mNative = p;
-    }
-	~WindowsPanelUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-        // defined by children
-	}
-	bool isNativeParent() {
-		return mNative->isNativeParent();
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-  private:
-
-	class WindowsPanel* mNative;
 
 };
 
@@ -571,7 +415,7 @@ class WindowsPanelUI : public PanelUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsButton : public WindowsComponent {
+class WindowsButton : public WindowsComponent, public ButtonUI {
 
   public:
 
@@ -593,91 +437,14 @@ class WindowsButton : public WindowsComponent {
 
 	void paint(Graphics* g);
 
+    void postOpen() {
+    }
+    bool isNativeParent() {
+        return false;
+    }
   private:
 
 	Button* mButton;
-
-};
-
-class WindowsButtonUI : public ButtonUI {
-
-  public:
-
-	WindowsButtonUI(WindowsButton* p) {
-        mNative = p;
-    }
-	~WindowsButtonUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	bool isNativeParent() {
-		return false;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-		mNative->getPreferredSize(w, d);
-	}
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-    // ButtonUI
-
-    void setText(const char* text) {
-        mNative->setText(text);
-    }
-	void click() {
-        mNative->click();
-    }
-
-  private:
-
-	class WindowsButton* mNative;
 
 };
 
@@ -687,7 +454,7 @@ class WindowsButtonUI : public ButtonUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsRadioButton : public WindowsComponent {
+class WindowsRadioButton : public WindowsComponent, public RadioButtonUI {
 
   public:
 
@@ -706,98 +473,18 @@ class WindowsRadioButton : public WindowsComponent {
 	void getPreferredSize(Window* w, Dimension* d);
 	void command(int code);
 
+    void postOpen() {
+    }
+    bool isNativeParent() {
+        return false;
+    }
+    void setText(const char* text) {
+    }
+    void click() {
+    }
   private:
 
 	RadioButton* mButton;
-
-};
-
-class WindowsRadioButtonUI : public RadioButtonUI {
-
-  public:
-
-	WindowsRadioButtonUI(WindowsRadioButton* b) {
-        mNative = b;
-    }
-	~WindowsRadioButtonUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-		mNative->getPreferredSize(w, d);
-	}
-	bool isNativeParent() {
-		return false;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-    // RadioButtonUI
-
-    void setSelected(bool b) {
-        mNative->setSelected(b);
-    }
-    bool isSelected() {
-        return mNative->isSelected();
-    }
-
-    // ButtonUI
-
-    void setText(const char* text) {
-    }
-	void click() {
-    }
-
-  private:
-
-	class WindowsRadioButton* mNative;
 
 };
 
@@ -807,7 +494,7 @@ class WindowsRadioButtonUI : public RadioButtonUI {
 //
 //////////////////////////////////////////////////////////////////////
 
-class WindowsRadios : public WindowsComponent {
+class WindowsRadios : public WindowsComponent, public RadiosUI {
 
   public:
 
@@ -822,46 +509,25 @@ class WindowsRadios : public WindowsComponent {
 	void open();
 	void changeSelection(RadioButton* b);
 
-  private:
-
-	Radios* mRadios;
-
-};
-
-class WindowsRadiosUI : public RadiosUI {
-
-  public:
-
-	WindowsRadiosUI(WindowsRadios* b) {
-        mNative = b;
+    void postOpen() {
     }
-	~WindowsRadiosUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
+    void getPreferredSize(Window* w, Dimension* d) {
         // defined by children
-	}
-	bool isNativeParent() {
-		return false;
-	}
-	bool isOpen() {
-		return true;
-	}
-	void command(int code) {
     }
-	Color* colorHook(Graphics* g) {
+    bool isNativeParent() {
+        return false;
+    }
+    bool isOpen() {
+        return true;
+    }
+    void command(int code) {
+    }
+    Color* colorHook(Graphics* g) {
         return NULL;
     }
     void invalidate(Component* c) {
     }
-	void paint(Graphics* g) {
+    void paint(Graphics* g) {
     }
     void close() {
     }
@@ -881,19 +547,9 @@ class WindowsRadiosUI : public RadiosUI {
     }
     void setFocus() {
     }
-    void debug() {
-        mNative->debug();
-    }
-
-    // RadiosUI
-
-    void changeSelection(RadioButton* b) {
-        mNative->changeSelection(b);
-    }
-
   private:
 
-	class WindowsRadios* mNative;
+	Radios* mRadios;
 
 };
 
@@ -903,7 +559,7 @@ class WindowsRadiosUI : public RadiosUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsCheckbox : public WindowsComponent {
+class WindowsCheckbox : public WindowsComponent, public CheckboxUI {
 
   public:
 
@@ -920,97 +576,20 @@ class WindowsCheckbox : public WindowsComponent {
 	void open();
 	void command(int code);
 
-  private:
-
-	Checkbox* mCheckbox;
-
-};
-
-class WindowsCheckboxUI : public CheckboxUI {
-  public:
-
-	WindowsCheckboxUI(WindowsCheckbox* b) {
-        mNative = b;
+    void postOpen() {
     }
-	~WindowsCheckboxUI() {
-        delete mNative;
+    bool isNativeParent() {
+        return false;
     }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-		mNative->getPreferredSize(w, d);
-	}
-	bool isNativeParent() {
-		return false;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-    // RadioButtonUI
-
-    void setSelected(bool b) {
-        mNative->setSelected(b);
-    }
-    bool isSelected() {
-        return mNative->isSelected();
-    }
-
-    // ButtonUI
 
     void setText(const char* text) {
     }
-	void click() {
+    void click() {
     }
 
   private:
 
-	class WindowsCheckbox* mNative;
+	Checkbox* mCheckbox;
 
 };
 
@@ -1020,7 +599,7 @@ class WindowsCheckboxUI : public CheckboxUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsComboBox : public WindowsComponent {
+class WindowsComboBox : public WindowsComponent, public ComboBoxUI {
 
   public:
 
@@ -1045,104 +624,16 @@ class WindowsComboBox : public WindowsComponent {
     // we have an unusal bounds updater
     void updateBounds();
 
+    void postOpen() {
+    }
+    bool isNativeParent() {
+        return false;
+    }
   private:
 
     int getFullHeight();
 
 	ComboBox* mComboBox;
-
-};
-
-class WindowsComboBoxUI : public ComboBoxUI {
-  public:
-
-	WindowsComboBoxUI(WindowsComboBox* b) {
-        mNative = b;
-    }
-	~WindowsComboBoxUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-		mNative->getPreferredSize(w, d);
-	}
-	bool isNativeParent() {
-		return false;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-    // ComboBoxUI
-
-    void setValues(StringList* values) {
-        mNative->setValues(values);
-    }
-    void addValue(const char* value) {
-        mNative->addValue(value);
-    }
-    void setSelectedIndex(int i) {
-        mNative->setSelectedIndex(i);
-    }
-    void setSelectedValue(const char* value) {
-        mNative->setSelectedValue(value);
-    }
-    int getSelectedIndex() {
-        return mNative->getSelectedIndex();
-    }
-    char* getSelectedValue() {
-        return mNative->getSelectedValue();
-    }
-
-  private:
-
-	class WindowsComboBox* mNative;
 
 };
 
@@ -1152,7 +643,7 @@ class WindowsComboBoxUI : public ComboBoxUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsListBox : public WindowsComponent {
+class WindowsListBox : public WindowsComponent, public ListBoxUI {
 
   public:
 
@@ -1178,102 +669,14 @@ class WindowsListBox : public WindowsComponent {
     // ownerdraw support
 	void paint(Graphics* g);
 
+    void postOpen() {
+    }
+    bool isNativeParent() {
+        return false;
+    }
   private:
 
 	ListBox* mListBox;
-
-};
-
-class WindowsListBoxUI : public ListBoxUI {
-  public:
-
-	WindowsListBoxUI(WindowsListBox* b) {
-        mNative = b;
-    }
-	~WindowsListBoxUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-        mNative->getPreferredSize(w, d);
-	}
-	bool isNativeParent() {
-		return false;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-    // ListBoxUI
-
-    void setValues(StringList* values) {
-        mNative->setValues(values);
-    }
-    void addValue(const char* value) {
-        mNative->addValue(value);
-    }
-    void setAnnotations(StringList* values) {
-        mNative->setAnnotations(values);
-    }
-    void setSelectedIndex(int i) {
-        mNative->setSelectedIndex(i);
-    }
-	int getSelectedIndex() {
-        return mNative->getSelectedIndex();
-    }
-    bool isSelected(int i) {
-        return mNative->isSelected(i);
-    }
-
-  private:
-
-	class WindowsListBox* mNative;
 
 };
 
@@ -1283,7 +686,7 @@ class WindowsListBoxUI : public ListBoxUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsGroupBox : public WindowsComponent {
+class WindowsGroupBox : public WindowsComponent, public GroupBoxUI {
 
   public:
 
@@ -1297,87 +700,17 @@ class WindowsGroupBox : public WindowsComponent {
 	void setText(const char* s);
 	void open();
 
+    void postOpen() {
+    }
+    void getPreferredSize(Window* w, Dimension* d) {
+        // defined by GroupBox but should be in the UI
+    }
+    bool isNativeParent() {
+        return false;
+    }
   private:
 
 	GroupBox* mGroupBox;
-
-};
-
-class WindowsGroupBoxUI : public GroupBoxUI {
-  public:
-
-	WindowsGroupBoxUI(WindowsGroupBox* b) {
-        mNative = b;
-    }
-	~WindowsGroupBoxUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-        // defined by GroupBox but should be in the UI
-	}
-	bool isNativeParent() {
-		return false;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-    // GroupBoxUI
-
-    void setText(const char* s) {
-        mNative->setText(s);
-    }
-
-  private:
-
-	class WindowsGroupBox* mNative;
 
 };
 
@@ -1387,7 +720,7 @@ class WindowsGroupBoxUI : public GroupBoxUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsText : public WindowsComponent {
+class WindowsText : public WindowsComponent, public virtual TextUI {
 
   public:
 
@@ -1408,95 +741,14 @@ class WindowsText : public WindowsComponent {
     void command(int code);
     LONG_PTR messageHandler(UINT msg, WPARAM wparam, LPARAM lparam);
 
+    void postOpen() {
+    }
+    bool isNativeParent() {
+        return false;
+    }
   protected:
 
     Text* mText;
-
-};
-
-class WindowsTextUI : public TextUI {
-  public:
-
-	WindowsTextUI() {
-    }
-	WindowsTextUI(WindowsText* b) {
-        mNative = b;
-    }
-	~WindowsTextUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-		mNative->getPreferredSize(w, d);
-	}
-	bool isNativeParent() {
-		return false;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-    // TextUI
-
-    void setEditable(bool b) {
-        mNative->setEditable(b);
-    }
-    void setText(const char* s) {
-        mNative->setText(s);
-    }
-    char* getText() {
-        return mNative->getText();
-    }
-
-  protected:
-
-	class WindowsText* mNative;
 
 };
 
@@ -1506,8 +758,7 @@ class WindowsTextUI : public TextUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsTextArea : public WindowsText 
-{
+class WindowsTextArea : public WindowsText, public TextAreaUI {
   public:
 
     WindowsTextArea(TextArea* t);
@@ -1515,97 +766,15 @@ class WindowsTextArea : public WindowsText
 
     void open();
 	void getPreferredSize(Window* w, Dimension* d);
- 
+
+    void postOpen() {
+    }
+    bool isNativeParent() {
+        return false;
+    }
   private:
 
 };
-
-class WindowsTextAreaUI : public TextAreaUI {
-  public:
-
-	WindowsTextAreaUI() {
-    }
-	WindowsTextAreaUI(WindowsTextArea* ta) {
-        mNative = ta;
-    }
-	~WindowsTextAreaUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-		mNative->getPreferredSize(w, d);
-	}
-	bool isNativeParent() {
-		return false;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-    // TextUI
-
-    void setEditable(bool b) {
-        mNative->setEditable(b);
-    }
-    void setText(const char* s) {
-        mNative->setText(s);
-    }
-    char* getText() {
-        return mNative->getText();
-    }
-
-  protected:
-
-	class WindowsTextArea* mNative;
-
-};
-
 
 /****************************************************************************
  *                                                                          *
@@ -1613,7 +782,7 @@ class WindowsTextAreaUI : public TextAreaUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsToolBar : public WindowsComponent {
+class WindowsToolBar : public WindowsComponent, public ToolBarUI {
 
   public:
 
@@ -1625,82 +794,17 @@ class WindowsToolBar : public WindowsComponent {
     }
 
 	void open();
-
+    void postOpen() {
+    }
+    void getPreferredSize(Window* w, Dimension* d) {
+        // not implemented yet
+    }
+    bool isNativeParent() {
+        return false;
+    }
    private:
 
 	ToolBar* mToolBar;
-
-};
-
-class WindowsToolBarUI : public ToolBarUI {
-  public:
-
-	WindowsToolBarUI(WindowsToolBar* b) {
-        mNative = b;
-    }
-	~WindowsToolBarUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-        // not implemented yet
-	}
-	bool isNativeParent() {
-		return false;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-  private:
-
-	class WindowsToolBar* mNative;
 
 };
 
@@ -1710,7 +814,7 @@ class WindowsToolBarUI : public ToolBarUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsStatusBar : public WindowsComponent {
+class WindowsStatusBar : public WindowsComponent, public StatusBarUI {
 
   public:
 
@@ -1723,81 +827,18 @@ class WindowsStatusBar : public WindowsComponent {
 
 	void open();
 
+    void postOpen() {
+    }
+    void getPreferredSize(Window* w, Dimension* d) {
+        // not implemented yet
+    }
+    bool isNativeParent() {
+        return false;
+    }
+
   private:
 
 	StatusBar* mStatusBar;
-
-};
-
-class WindowsStatusBarUI : public StatusBarUI {
-  public:
-
-	WindowsStatusBarUI(WindowsStatusBar* b) {
-        mNative = b;
-    }
-	~WindowsStatusBarUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-        // not implemented yet
-	}
-	bool isNativeParent() {
-		return false;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-  private:
-
-	class WindowsStatusBar* mNative;
 
 };
 
@@ -1807,7 +848,7 @@ class WindowsStatusBarUI : public StatusBarUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsTabbedPane : public WindowsComponent {
+class WindowsTabbedPane : public WindowsComponent, public TabbedPaneUI {
 
   public:
 	
@@ -1825,97 +866,21 @@ class WindowsTabbedPane : public WindowsComponent {
 	void getPreferredSize(Window* w, Dimension* d);
     void command(int code);
     void notify(int code);
-	
+
+    void postOpen() {
+    }
+    bool isNativeParent() {
+        // This feels like it should be true but apparently not
+        // we have historically just overlayed a child window on top.
+        // I tried setting it true to debug the problem with lightweight
+        // labels but that didn't work.
+        return false;
+    }
    private:
 
     void forceHeavyLabels(Component* c);
 
 	TabbedPane* mTabbedPane;
-
-};
-
-class WindowsTabbedPaneUI : public TabbedPaneUI {
-  public:
-
-	WindowsTabbedPaneUI(WindowsTabbedPane* b) {
-        mNative = b;
-    }
-	~WindowsTabbedPaneUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-        mNative->getPreferredSize(w, d);
-	}
-	bool isNativeParent() {
-        // This feels like it should be true but apparently not
-        // we have historically just overlayed a child window on top.
-        // I tried setting it true to debug the problem with lightweight
-        // labels but that didn't work.
-		return false;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-    // TabbedPaneUI
-
-    void setSelectedIndex(int i) {
-        mNative->setSelectedIndex(i);
-    }
-    int getSelectedIndex() {
-        return mNative->getSelectedIndex();
-    }
-
-  private:
-
-	class WindowsTabbedPane* mNative;
 
 };
 
@@ -1925,7 +890,7 @@ class WindowsTabbedPaneUI : public TabbedPaneUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsTable : public WindowsComponent {
+class WindowsTable : public WindowsComponent, public TableUI {
 
   public:
 
@@ -1950,6 +915,11 @@ class WindowsTable : public WindowsComponent {
     // ownerdraw support
 	void paint(Graphics* g);
 
+    void postOpen() {
+    }
+    bool isNativeParent() {
+        return false;
+    }
   private:
 
 	int getMaxColumnWidth(Window* w, TableModel* model, int col);
@@ -1961,106 +931,16 @@ class WindowsTable : public WindowsComponent {
 	int mHeaderHeight;
 };
 
-class WindowsTableUI : public TableUI {
-  public:
-
-	WindowsTableUI(WindowsTable* b) {
-        mNative = b;
-    }
-	~WindowsTableUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-        mNative->getPreferredSize(w, d);
-	}
-	bool isNativeParent() {
-		return false;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-    // TableUI
-
-    void rebuild() {
-        mNative->rebuild();
-    }
-    void setSelectedIndex(int i) {
-        mNative->setSelectedIndex(i);
-    }
-	int getSelectedIndex() {
-        return mNative->getSelectedIndex();
-    }
-    bool isSelected(int i) {
-        return mNative->isSelected(i);
-    }
-    List* getColumnWidths(Window* w) {
-        return mNative->getColumnWidths(w);
-    }
-
-  private:
-
-	class WindowsTable* mNative;
-
-};
-
 /****************************************************************************
  *                                                                          *
  *   								 TREE                                   *
  *                                                                          *
  ****************************************************************************/
 
-class WindowsTree : public WindowsComponent {
+class WindowsTree : public WindowsComponent, public TreeUI {
 
   public:
-	
+
 	WindowsTree(Tree* t);
 	~WindowsTree();
 
@@ -2069,82 +949,18 @@ class WindowsTree : public WindowsComponent {
     }
 
 	void open();
-	
+    void postOpen() {
+    }
+    void getPreferredSize(Window* w, Dimension* d) {
+        // not implemented yet
+    }
+    bool isNativeParent() {
+        return false;
+    }
+
    private:
 
 	Tree* mTree;
-
-};
-
-class WindowsTreeUI : public TreeUI {
-  public:
-
-	WindowsTreeUI(WindowsTree* b) {
-        mNative = b;
-    }
-	~WindowsTreeUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-        // not implemented yet
-	}
-	bool isNativeParent() {
-		return false;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-  private:
-
-	class WindowsTree* mNative;
 
 };
 
@@ -2154,7 +970,7 @@ class WindowsTreeUI : public TreeUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsScrollBar : public WindowsComponent {
+class WindowsScrollBar : public WindowsComponent, public ScrollBarUI {
 
   public:
 
@@ -2171,88 +987,15 @@ class WindowsScrollBar : public WindowsComponent {
 
 	void scroll(int code);
 	Color* colorHook(Graphics* g);
+    void postOpen() {
+    }
+    bool isNativeParent() {
+        return false;
+    }
 
   private:
 
 	ScrollBar* mScrollBar;
-
-};
-
-class WindowsScrollBarUI : public ScrollBarUI {
-  public:
-
-	WindowsScrollBarUI(WindowsScrollBar* b) {
-        mNative = b;
-    }
-	~WindowsScrollBarUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-        mNative->getPreferredSize(w, d);
-	}
-	bool isNativeParent() {
-		return false;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-    // ScrollBarUI
-
-    void update() {
-        mNative->update();
-    }
-
-  private:
-
-	class WindowsScrollBar* mNative;
 
 };
 
@@ -2262,7 +1005,7 @@ class WindowsScrollBarUI : public ScrollBarUI {
  *                                                                          *
  ****************************************************************************/
 
-class WindowsWindow : public WindowsComponent {
+class WindowsWindow : public WindowsComponent, public virtual WindowUI {
 
   public:
 	
@@ -2293,7 +1036,16 @@ class WindowsWindow : public WindowsComponent {
 
 	// has to be public so we can tear down under
 	// special cirumstances (VST DLL unloading)
-	
+
+    void postOpen() {
+    }
+    void getPreferredSize(Window* w, Dimension* d) {
+        // size defined by children
+    }
+    bool isNativeParent() {
+        return true;
+    }
+
   protected:
 
 	/**
@@ -2347,106 +1099,13 @@ class WindowsWindow : public WindowsComponent {
 
 };
 
-class WindowsWindowUI : public WindowUI {
-  public:
-
-	WindowsWindowUI(WindowsWindow* b) {
-        mNative = b;
-    }
-	~WindowsWindowUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-        // size defined by children
-	}
-	bool isNativeParent() {
-		return true;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	bool isChild() {
-		return mNative->isChild();
-	}
-	void toFront() {
-		mNative->toFront();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-    // WindowUI
-
-    Graphics* getGraphics() {
-        return mNative->getGraphics();
-    }
-    int run() {
-        return mNative->run();
-    }
-    void relayout() {
-        mNative->relayout();
-    }
-    void setBackground(Color* c) {
-        mNative->setBackground(c);
-    }
-
-  protected:
-
-	class WindowsWindow* mNative;
-
-};
-
 //////////////////////////////////////////////////////////////////////
 //
 // WindowsHostFrame
 //
 //////////////////////////////////////////////////////////////////////
 
-class WindowsHostFrame : public WindowsWindow {
+class WindowsHostFrame : public WindowsWindow, public HostFrameUI {
 
   public:
 	
@@ -2455,6 +1114,15 @@ class WindowsHostFrame : public WindowsWindow {
 
 	void open();
     void close();
+
+    void postOpen() {
+    }
+    void getPreferredSize(Window* w, Dimension* d) {
+        // size defined by children
+    }
+    bool isNativeParent() {
+        return true;
+    }
 
     // overload from WindowsWindow to return the host window handle
     HWND getParentWindowHandle();
@@ -2465,106 +1133,13 @@ class WindowsHostFrame : public WindowsWindow {
 
 };
 
-class WindowsHostFrameUI : public HostFrameUI {
-  public:
-
-	WindowsHostFrameUI(WindowsHostFrame* f) {
-        mNative = f;
-    }
-	~WindowsHostFrameUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-        // size defined by children
-	}
-	bool isNativeParent() {
-		return true;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	bool isChild() {
-		return mNative->isChild();
-	}
-	void toFront() {
-		mNative->toFront();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-    // WindowUI
-
-    Graphics* getGraphics() {
-        return mNative->getGraphics();
-    }
-    int run() {
-        return mNative->run();
-    }
-    void relayout() {
-        mNative->relayout();
-    }
-    void setBackground(Color* c) {
-        mNative->setBackground(c);
-    }
-
-  protected:
-
-	class WindowsHostFrame* mNative;
-
-};
-
 /****************************************************************************
  *                                                                          *
  *                                   DIALOG                                 *
  *                                                                          *
  ****************************************************************************/
 
-class WindowsDialog : public WindowsWindow {
+class WindowsDialog : public WindowsWindow, public DialogUI {
 
   public:
 	
@@ -2574,108 +1149,18 @@ class WindowsDialog : public WindowsWindow {
     LRESULT dialogHandler(UINT msg, WPARAM wparam, LPARAM lparam);
     void show();
 
+    void postOpen() {
+    }
+    void getPreferredSize(Window* w, Dimension* d) {
+        // size defined by children
+    }
+    bool isNativeParent() {
+        return true;
+    }
+
   protected:
 
     unsigned long modalEventLoop();
-
-};
-
-class WindowsDialogUI : public DialogUI {
-  public:
-
-	WindowsDialogUI(WindowsDialog * d) {
-        mNative = d;
-    }
-	~WindowsDialogUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-        // size defined by children
-	}
-	bool isNativeParent() {
-		return true;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	bool isChild() {
-		return mNative->isChild();
-	}
-	void toFront() {
-		mNative->toFront();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-    // WindowUI
-
-    Graphics* getGraphics() {
-        return mNative->getGraphics();
-    }
-    int run() {
-        return mNative->run();
-    }
-    void relayout() {
-        mNative->relayout();
-    }
-    void setBackground(Color* c) {
-        mNative->setBackground(c);
-    }
-
-    // DialogUI
-    
-    void show() {
-        mNative->show();
-    }
-
-  protected:
-
-	class WindowsDialog* mNative;
 
 };
 
@@ -2688,7 +1173,7 @@ class WindowsDialogUI : public DialogUI {
 /**
  * The same UI class is used for all MenuItems.
  */
-class WindowsMenuItem : public WindowsComponent {
+class WindowsMenuItem : public WindowsComponent, public MenuUI {
 
   public: 
 
@@ -2709,6 +1194,14 @@ class WindowsMenuItem : public WindowsComponent {
     void close();
     void invalidateHandle();
     void openPopup(Window* window, int x, int y);
+    void postOpen() {
+    }
+    void getPreferredSize(Window* w, Dimension* d) {
+        // not an embedded component
+    }
+    bool isNativeParent() {
+        return false;
+    }
 
 	// for use by WindowsWindowUI?
     Menu* findMenu(HMENU handle);
@@ -2730,90 +1223,6 @@ class WindowsMenuItem : public WindowsComponent {
     MenuItem* mItem;
     HMENU mMenuHandle;
     bool mCreated;
-
-};
-
-class WindowsMenuUI : public MenuUI {
-  public:
-
-	WindowsMenuUI(WindowsMenuItem* i) {
-        mNative = i;
-    }
-	~WindowsMenuUI() {
-        delete mNative;
-    }
-    NativeComponent* getNative() {
-        return mNative;
-    }
-	void open() {
-        mNative->open();
-    }
-	void postOpen() {
-    }
-	void getPreferredSize(Window* w, Dimension* d) {
-        // not an embedded component
-	}
-	bool isNativeParent() {
-		return false;
-	}
-	bool isOpen() {
-		return mNative->isOpen();
-	}
-	void command(int code) {
-        mNative->command(code);
-    }
-	Color* colorHook(Graphics* g) {
-        return mNative->colorHook(g);
-    }
-    void invalidate(Component* c) {
-        mNative->invalidate(c);
-    }
-	void paint(Graphics* g) {
-        mNative->paint(g);
-    }
-    void close() {
-        mNative->close();
-    }
-    void invalidateHandle() {
-        mNative->invalidateHandle();
-    }
-    void updateBounds() {
-        mNative->updateBounds();
-    }
-    void setEnabled(bool b) {
-        mNative->setEnabled(b);
-    }
-    bool isEnabled() {
-        return mNative->isEnabled();
-    }
-    void setVisible(bool b) {
-        mNative->setVisible(b);
-    }
-    bool isVisible() {
-        return mNative->isVisible();
-    }
-    void setFocus() {
-        mNative->setFocus();
-    }
-    void debug() {
-        mNative->debug();
-    }
-
-    // MenuUI
-
-    void setChecked(bool b) {
-        mNative->setChecked(b);
-    }
-    void removeAll() {
-        mNative->removeAll();
-    }
-    void openPopup(Window* window, int x, int y) {
-        mNative->openPopup(window, x, y);
-    }
-
-  private:
-
-	class WindowsMenuItem* mNative;
 
 };
 
